@@ -3,8 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Key, Download, Upload, RefreshCw, Copy, Eye, EyeOff, Shield } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Key, Download, Upload, RefreshCw, Copy, Eye, EyeOff, Shield, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface KeyPair {
   id: string;
@@ -24,60 +26,91 @@ export const KeyManagement = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load existing keys from localStorage
-    const savedKeys = localStorage.getItem('cryptochain-keys');
-    if (savedKeys) {
-      try {
-        const parsed = JSON.parse(savedKeys);
-        setKeyPairs(parsed.map((key: any) => ({
-          ...key,
-          createdAt: new Date(key.createdAt)
-        })));
-      } catch (error) {
-        console.error('Failed to load saved keys:', error);
-      }
-    }
+    loadKeyPairs();
   }, []);
 
-  const saveKeys = (keys: KeyPair[]) => {
-    localStorage.setItem('cryptochain-keys', JSON.stringify(keys));
+  const loadKeyPairs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('key_pairs')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setKeyPairs(data.map((key: any) => ({
+        ...key,
+        createdAt: new Date(key.created_at)
+      })));
+    } catch (error) {
+      console.error('Failed to load key pairs:', error);
+      toast({
+        title: "Loading Failed",
+        description: "Failed to load key pairs from database.",
+        variant: "destructive"
+      });
+    }
   };
 
+  const [newKeyName, setNewKeyName] = useState('');
+
   const generateKeyPair = async (algorithm: 'RSA-2048' | 'RSA-4096' = 'RSA-2048') => {
+    if (!newKeyName.trim()) {
+      toast({
+        title: "Name Required",
+        description: "Please enter a name for the key pair.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsGenerating(true);
     
     try {
-      // Simulate key generation (in real implementation, use Web Crypto API)
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const keyId = crypto.randomUUID();
-      const publicKey = generateMockPublicKey();
-      const privateKey = generateMockPrivateKey();
-      const fingerprint = await generateFingerprint(publicKey);
-      
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Authentication required');
+      }
+
+      // Call key generation edge function
+      const { data, error } = await supabase.functions.invoke('generate-keypair', {
+        body: {
+          keyName: newKeyName.trim(),
+          algorithm
+        }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      // Add new key pair to local state
       const newKeyPair: KeyPair = {
-        id: keyId,
-        name: `Key Pair ${keyPairs.length + 1}`,
-        publicKey,
-        privateKey,
-        algorithm,
-        createdAt: new Date(),
-        fingerprint,
+        id: data.keyPair.id,
+        name: data.keyPair.name,
+        publicKey: data.keyPair.publicKey,
+        privateKey: data.keyPair.privateKey,
+        algorithm: data.keyPair.algorithm,
+        createdAt: new Date(data.keyPair.createdAt),
+        fingerprint: data.keyPair.fingerprint,
         status: 'active'
       };
 
-      const updatedKeys = [newKeyPair, ...keyPairs];
-      setKeyPairs(updatedKeys);
-      saveKeys(updatedKeys);
+      setKeyPairs(prev => [newKeyPair, ...prev]);
+      setNewKeyName('');
+
+      // Download private key for safekeeping
+      downloadKey(newKeyPair, 'private');
 
       toast({
         title: "Key Pair Generated",
-        description: `New ${algorithm} key pair created successfully.`,
+        description: `New ${algorithm} key pair created successfully. Private key downloaded for safekeeping.`,
       });
     } catch (error) {
+      console.error('Key generation error:', error);
       toast({
         title: "Generation Failed",
-        description: "Failed to generate key pair. Please try again.",
+        description: error.message || "Failed to generate key pair. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -137,8 +170,17 @@ kASIuR7mA4ovnkmVUl7ROBLeNCVS0CMz4TorpsVj3EoEIcTI7woJ+nf5YkcHwmwd
     }));
   };
 
-  const exportKey = (keyPair: KeyPair, type: 'public' | 'private') => {
+  const downloadKey = (keyPair: KeyPair, type: 'public' | 'private') => {
     const key = type === 'public' ? keyPair.publicKey : keyPair.privateKey;
+    if (!key) {
+      toast({
+        title: "Key Not Available",
+        description: `${type} key is not available for download.`,
+        variant: "destructive"
+      });
+      return;
+    }
+    
     const blob = new Blob([key], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -148,6 +190,31 @@ kASIuR7mA4ovnkmVUl7ROBLeNCVS0CMz4TorpsVj3EoEIcTI7woJ+nf5YkcHwmwd
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const deleteKeyPair = async (keyPairId: string) => {
+    try {
+      const { error } = await supabase
+        .from('key_pairs')
+        .delete()
+        .eq('id', keyPairId);
+
+      if (error) throw error;
+
+      setKeyPairs(prev => prev.filter(kp => kp.id !== keyPairId));
+      
+      toast({
+        title: "Key Pair Deleted",
+        description: "Key pair deleted successfully.",
+      });
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: "Deletion Failed",
+        description: "Failed to delete key pair.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -163,41 +230,53 @@ kASIuR7mA4ovnkmVUl7ROBLeNCVS0CMz4TorpsVj3EoEIcTI7woJ+nf5YkcHwmwd
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button 
-              onClick={() => generateKeyPair('RSA-2048')}
-              disabled={isGenerating}
-              className="crypto-glow"
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Key className="w-4 h-4 mr-2" />
-                  Generate RSA-2048
-                </>
-              )}
-            </Button>
-            <Button 
-              onClick={() => generateKeyPair('RSA-4096')}
-              disabled={isGenerating}
-              variant="outline"
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Shield className="w-4 h-4 mr-2" />
-                  Generate RSA-4096
-                </>
-              )}
-            </Button>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Key Pair Name</label>
+              <Input
+                placeholder="e.g., My Encryption Key"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button 
+                onClick={() => generateKeyPair('RSA-2048')}
+                disabled={isGenerating || !newKeyName.trim()}
+                className="crypto-glow"
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Generate RSA-2048
+                  </>
+                )}
+              </Button>
+              <Button 
+                onClick={() => generateKeyPair('RSA-4096')}
+                disabled={isGenerating || !newKeyName.trim()}
+                variant="outline"
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-4 h-4 mr-2" />
+                    Generate RSA-4096
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -240,11 +319,21 @@ kASIuR7mA4ovnkmVUl7ROBLeNCVS0CMz4TorpsVj3EoEIcTI7woJ+nf5YkcHwmwd
                         </Badge>
                       </div>
                     </div>
-                    <div className="text-right text-sm text-muted-foreground">
-                      <div>Created: {keyPair.createdAt.toLocaleDateString()}</div>
-                      <div className="font-mono text-xs">
-                        {keyPair.fingerprint}
+                    <div className="flex items-center gap-2">
+                      <div className="text-right text-sm text-muted-foreground">
+                        <div>Created: {keyPair.createdAt.toLocaleDateString()}</div>
+                        <div className="font-mono text-xs">
+                          {keyPair.fingerprint}
+                        </div>
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteKeyPair(keyPair.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
 
@@ -270,10 +359,10 @@ kASIuR7mA4ovnkmVUl7ROBLeNCVS0CMz4TorpsVj3EoEIcTI7woJ+nf5YkcHwmwd
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => exportKey(keyPair, 'public')}
+                          onClick={() => downloadKey(keyPair, 'public')}
                         >
                           <Download className="w-4 h-4 mr-1" />
-                          Export
+                          Download
                         </Button>
                       </div>
                     </TabsContent>
@@ -309,10 +398,11 @@ kASIuR7mA4ovnkmVUl7ROBLeNCVS0CMz4TorpsVj3EoEIcTI7woJ+nf5YkcHwmwd
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => exportKey(keyPair, 'private')}
+                          onClick={() => downloadKey(keyPair, 'private')}
+                          disabled={!keyPair.privateKey}
                         >
                           <Download className="w-4 h-4 mr-1" />
-                          Export
+                          Download
                         </Button>
                       </div>
                     </TabsContent>

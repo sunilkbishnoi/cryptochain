@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, Hash, Clock, Shield, Database, Activity } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface BlockchainTransaction {
   txId: string;
@@ -23,33 +24,39 @@ export const BlockchainExplorer = () => {
   const [blockHeight, setBlockHeight] = useState(1337);
 
   useEffect(() => {
-    // Simulate some existing blockchain transactions
-    const mockTransactions: BlockchainTransaction[] = [
-      {
-        txId: '0xa1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
-        blockNumber: 1337,
-        timestamp: new Date(Date.now() - 3600000),
-        fileHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-        encryptedKey: 'rsa_encrypted_aes_key_base64_encoded_string_here',
-        senderId: '0x742d35Cc6634C0532925a3b8D400551E9b7c865e',
-        recipientId: '0x8ba1f109551bD432803012645Hac136c18B08f7a',
-        gasUsed: 21000,
-        status: 'confirmed'
-      },
-      {
-        txId: '0xb2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456a1',
-        blockNumber: 1336,
-        timestamp: new Date(Date.now() - 7200000),
-        fileHash: 'f7fbba6e0636f890e56fbbf3283e524c6fa3204ae298382d624741d0dc6638326',
-        encryptedKey: 'another_rsa_encrypted_aes_key_base64_encoded_string',
-        senderId: '0x8ba1f109551bD432803012645Hac136c18B08f7a',
-        recipientId: '0x742d35Cc6634C0532925a3b8D400551E9b7c865e',
-        gasUsed: 21000,
-        status: 'confirmed'
-      }
-    ];
-    setTransactions(mockTransactions);
+    loadTransactions();
   }, []);
+
+  const loadTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('blockchain_transactions')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      setTransactions(data.map(tx => ({
+        txId: tx.tx_id,
+        blockNumber: tx.block_number,
+        timestamp: new Date(tx.timestamp),
+        fileHash: tx.file_hash,
+        encryptedKey: tx.encrypted_aes_key,
+        senderId: tx.sender_id,
+        recipientId: tx.recipient_id,
+        gasUsed: tx.gas_used,
+        status: tx.status as 'confirmed' | 'pending' | 'failed'
+      })));
+
+      // Update block height to latest
+      if (data.length > 0) {
+        setBlockHeight(Math.max(...data.map(tx => tx.block_number)));
+      }
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+    }
+  };
 
   const filteredTransactions = transactions.filter(tx =>
     tx.txId.toLowerCase().includes(searchTerm.toLowerCase()) ||
