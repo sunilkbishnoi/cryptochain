@@ -1,73 +1,27 @@
-# Welcome to your Lovable project
+# 🔐 Blockchain PDF Encryption & Decryption Platform
 
-## Project info
+## 📖 About the Project
+This web application lets you **securely encrypt and decrypt PDF files** using advanced **AES-256 + RSA encryption** with **blockchain-backed key storage**.
 
-**URL**: https://lovable.dev/projects/9f517bcd-172b-4b63-b41d-71a0e066dbdc
+### 🛡 Key Features
+- **PDF Encryption** → Upload a PDF, encrypt it with AES-256, and store the encryption key securely on a blockchain.
+- **Blockchain Security** → Metadata (hash, encrypted key, timestamp) is stored immutably for verification and retrieval.
+- **Encrypted File Download** → Save the encrypted file locally in `.enc` format.
+- **Cross-Device Decryption** → Decrypt on another device by uploading the encrypted file and your private RSA key.
+- **Integrity Verification** → SHA-256 hash checks ensure the file hasn’t been tampered with.
+- **Multi-Factor Authentication** → Extra security before decryption.
 
-## How can I edit this code?
+### 🎯 Why Use This?
+- Protect sensitive PDFs with **military-grade encryption**.
+- Ensure **tamper-proof verification** via blockchain.
+- Enable **secure file sharing** without exposing encryption keys.
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## 🖥 Tech Overview
+- **Frontend:** React + Tailwind CSS + shadcn-ui
+- **Backend:** Node.js / Python (Encryption & Blockchain logic)
+- **Blockchain:** Private/Permissioned network (e.g., Hyperledger/Ethereum)
+- **Security:** AES-256, RSA-4096, SHA-256, MFA
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/9f517bcd-172b-4b63-b41d-71a0e066dbdc) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/9f517bcd-172b-4b63-b41d-71a0e066dbdc) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+---
